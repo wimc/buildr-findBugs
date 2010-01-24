@@ -29,5 +29,5 @@ TEXT
   spec.require_paths  = ['lib']
   spec.has_rdoc         = true
   spec.extra_rdoc_files = 'README.rdoc', 'LICENSE', 'NOTICE'
-  spec.add_dependency("buildr", ">= 1.3.5")
+  spec.add_dependency("buildr", ">= 1.4.0")
 end

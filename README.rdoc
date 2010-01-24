@@ -14,6 +14,8 @@ Need to run FindBugs as part of your CI build ?
 
 Install FindBugs and set FINDBUGS_HOME to the root folder of that installation
 
+Add "require 'buildr-findBugs'" to your Buildfile.
+
 Execute 'buildr findBugs' from the command line.
 
 == License
