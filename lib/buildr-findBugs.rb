@@ -4,30 +4,32 @@ module Buildr
   module FindBugs
     include Extension
 
-    class FindBugsTask < Rake::FileTask
+    class FindBugsTask < Rake::Task
 
       attr_reader :project
       
-      attr_writer :sourcePath, :auxAnalyzePath, :auxClasspath, :jvmargs
+      attr_writer :sourcePath, :auxAnalyzePath, :auxClasspath, :jvmargs, :report
 
       def initialize(*args) #:nodoc:
         super
         enhance do
           raise "Cannot run Findbugs, FINDBUGS_HOME undefined" unless defined? ENV['FINDBUGS_HOME']
-          mkpath File.dirname(to_s) #otherwise Findbugs can't find its own file
+          mkpath File.dirname(report) #otherwise Findbugs can't create the file
           
           Buildr.ant('findBugs') do |ant|
             refid = "#{project.name}-auxClasspath"
+            artifacts = [Buildr::artifact("com.google.code.findbugs:findbugs-ant:jar:1.3.9")]
+            artifacts.each {|lib| lib.invoke}
+            # We use a huge classpath.
             ant.path :id => refid do
-              [auxClasspath].flatten.each do |elt|
+              [[auxClasspath] + artifacts].flatten.each do |elt|
                 ant.pathelement :location => elt
               end
             end
-            artifacts = [Buildr::artifact("com.google.code.findbugs:findbugs-ant:jar:1.3.9")]
-            artifacts.each {|lib| lib.invoke}
+            
             ant.taskdef :name=>'findBugs',
-                  :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask', :classpath=>artifacts.join(File::PATH_SEPARATOR)
-            ant.findBugs :output => "xml", :outputFile => to_s, :home => ENV['FINDBUGS_HOME'], :jvmargs => jvmargs do
+                  :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask', :classpathref => refid
+            ant.findBugs :output => "xml", :outputFile => report, :home => ENV['FINDBUGS_HOME'], :jvmargs => jvmargs do
               ant.sourcePath(:path => sourcePath)
               ant.auxAnalyzePath :path => auxAnalyzePath
               ant.auxClasspath :refid => refid
@@ -36,6 +38,10 @@ module Buildr
           end
 
         end
+      end
+      
+      def report
+        @report || project.path_to(:reports, "findbugs.xml")
       end
       
       def sourcePath
@@ -85,15 +91,13 @@ module Buildr
       Project.local_task('findBugs') { |name| "Run Findbugs on #{name}" }
     end
 
-    before_define(:findBugs) do |project|
-      wrapper = Rake::Task.define_task('findBugs')
-      task = FindBugsTask.define_task(project.path_to(:reports, "findbugs.xml"))
+    before_define do |project|
+      task = FindBugsTask.define_task('findBugs')
       task.send :associate_with, project
-      task.enhance [project.compile]
-      wrapper.enhance [task]
+      project.recursive_task('findBugs')
     end
-    
-    after_define(:findBugs => :compile) do |project|
+
+    after_define do |project|  
       project.clean do
         rm_rf project.path_to(:reports, "findbugs.xml")
       end
