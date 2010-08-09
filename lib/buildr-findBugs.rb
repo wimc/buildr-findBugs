@@ -3,68 +3,74 @@
 module Buildr
   module FindBugs
     include Extension
+    VERSION = "1.3.9"
+
+    class << self
+      def version
+        Buildr.settings.build['findbugs'] || VERSION
+      end
+    end
+
+    REQUIRES = ["com.google.code.findbugs:findbugs-ant:jar:#{version}"]
+
+    class << self
+      def requires
+        @requires ||= Buildr.transitive(REQUIRES).each(& :invoke).map(& :to_s)
+      end
+    end
 
     class FindBugsTask < Rake::Task
 
       attr_reader :project
-      
+
       attr_writer :sourcePath, :auxAnalyzePath, :auxClasspath, :jvmargs, :report
 
-      def initialize(*args) #:nodoc:
+      def initialize(* args) #:nodoc:
         super
-        enhance do
-          raise "Cannot run Findbugs, FINDBUGS_HOME undefined" unless defined? ENV['FINDBUGS_HOME']
+        enhance([:compile]) do
           mkpath File.dirname(report) #otherwise Findbugs can't create the file
-          
+
           Buildr.ant('findBugs') do |ant|
-            refid = "#{project.name}-auxClasspath"
-            artifacts = [Buildr::artifact("com.google.code.findbugs:findbugs-ant:jar:1.3.9")]
-            artifacts.each {|lib| lib.invoke}
-            # We use a huge classpath.
-            ant.path :id => refid do
-              [[auxClasspath] + artifacts].flatten.each do |elt|
-                ant.pathelement :location => elt
-              end
-            end
-            
+            antClasspath = FindBugs.requires.join(File::PATH_SEPARATOR)
+
             ant.taskdef :name=>'findBugs',
-                  :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask', :classpathref => refid
-            ant.findBugs :output => "xml", :outputFile => report, :home => ENV['FINDBUGS_HOME'], :jvmargs => jvmargs do
-              ant.sourcePath(:path => sourcePath)
+                        :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask',
+                        :classpath => antClasspath
+            ant.findBugs :output => "xml", :outputFile => report, :classpath => antClasspath, :pluginList => '', :jvmargs => jvmargs do
+              ant.sourcePath :path => sourcePath
               ant.auxAnalyzePath :path => auxAnalyzePath
-              ant.auxClasspath :refid => refid
+              ant.auxClasspath { |aux| auxClasspath.each { |dep| aux.pathelement :location => dep } } unless auxClasspath.empty?
             end
 
           end
 
         end
       end
-      
+
       def report
         @report || project.path_to(:reports, "findbugs.xml")
       end
-      
+
       def sourcePath
         @sourcePath || project.compile.sources.select { |source| File.directory?(source) }.join(File::PATH_SEPARATOR)
       end
-      
+
       def auxAnalyzePath
         @auxAnalyzePath || project.compile.target
       end
-      
+
       def auxClasspath
-        @auxClasspath || [project.compile.dependencies]
+        @auxClasspath || project.compile.dependencies
       end
-      
+
       def jvmargs
         @jvmargs || "-Xmx512m"
       end
-        
 
       # :call-seq:
       #   with(options) => self
       #
-      # Passes options to the task and returns self. 
+      # Passes options to the task and returns self.
       #
       def with(options)
         options.each do |key, value|
@@ -76,14 +82,14 @@ module Buildr
         end
         self
       end
-      
-      private 
+
+      private
 
       def associate_with(project)
         @project = project
-      end    
-      
-      
+      end
+
+
     end
 
     first_time do
@@ -97,14 +103,14 @@ module Buildr
       project.recursive_task('findBugs')
     end
 
-    after_define do |project|  
+    after_define do |project|
       project.clean do
         rm_rf project.path_to(:reports, "findbugs.xml")
       end
     end
 
-    def findBugs(*deps, &block)
-      task('findBugs').enhance deps, &block
+    def findBugs(* deps, & block)
+      task('findBugs').enhance deps, & block
     end
   end
 end
@@ -112,3 +118,4 @@ end
 class Buildr::Project
   include Buildr::FindBugs
 end
+
