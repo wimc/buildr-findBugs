@@ -23,7 +23,7 @@ module Buildr
 
       attr_reader :project
 
-      attr_writer :sourcePath, :auxAnalyzePath, :auxClasspath, :jvmargs, :report
+      attr_writer :sourcePath, :auxAnalyzePath, :auxClasspath, :jvmargs, :report, :excludeFilter
 
       def initialize(* args) #:nodoc:
         super
@@ -32,11 +32,12 @@ module Buildr
 
           Buildr.ant('findBugs') do |ant|
             antClasspath = FindBugs.requires.join(File::PATH_SEPARATOR)
+            excludeFilterFile = File.expand_path(excludeFilter)
 
             ant.taskdef :name=>'findBugs',
                         :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask',
                         :classpath => antClasspath
-            ant.findBugs :output => "xml", :outputFile => report, :classpath => antClasspath, :pluginList => '', :jvmargs => jvmargs do
+            ant.findBugs :output => "xml", :outputFile => report, :classpath => antClasspath, :pluginList => '', :jvmargs => jvmargs, :excludeFilter => excludeFilterFile do
               ant.sourcePath :path => sourcePath
               ant.auxAnalyzePath :path => auxAnalyzePath
               ant.auxClasspath { |aux| auxClasspath.each { |dep| aux.pathelement :location => dep } } unless auxClasspath.empty?
@@ -65,6 +66,10 @@ module Buildr
 
       def jvmargs
         @jvmargs || "-Xmx512m"
+      end
+
+      def excludeFilter
+        @excludeFilter || project.path_to("exclude_filter.xml")
       end
 
       # :call-seq:
